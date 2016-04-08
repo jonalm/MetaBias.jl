@@ -6,7 +6,7 @@ srand(42) # fixed random seed
 
 # data used in tests
 zi, vi = import_sampledata("../data/sampledata.hdf5", "/konstantopoulos");
-r = randn(5)
+
 
 facts("abcd parameters equal in Null and MixModel") do
     lp0 = NullLikelihoodPrior(zi,vi)
@@ -30,11 +30,16 @@ facts("updating τ is consistent with calculating from scratch") do
     end
 end
 
-facts("Null likelihod prior proportioal to density") do
+facts("Null likelihod prior density proportioal to null pdf") do
+    N = 10
     τ = 3.0
-    nullposterior = NullPosterior(zi,vi,τ)
-    display(pdf(nullposterior, r))
-    #nulllikelihoodprior = 
-    #@fact lp0.ndp --> lp1.ndp
+    np = NullPosterior(zi,vi,τ)
+    nlp = NullLikelihoodPrior(zi,vi,τ)
+    r = randn(10)*2*std(np) + mean(np)
+    ratio_vec = pdf(np, r) ./ density(nlp, r)
+    ratio = ratio_vec[1]
+    for i in 2:N
+        @fact ratio_vec[i] --> roughly(ratio)
+    end
 end
 

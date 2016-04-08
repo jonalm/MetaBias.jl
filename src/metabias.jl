@@ -1,7 +1,6 @@
 module MetaBias
 export NullLikelihoodPrior,MixModelLikelihoodPrior, NullPosterior, reset_τ, import_sampledata, density
 
-#using Base.length
 using Distributions: Normal
 using HDF5: h5open
 
@@ -64,8 +63,19 @@ function Ni(μ, σ, Z)
     1.0 - cdf(nd,σ*Z) + cdf(nd,-σ*Z)
 end
 
+function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
+    N = length(x)
+    res = Array(eltype(x),N)
+    for i in 1:N
+        res[i] = density(null, x[i])
+    end
+    res
+end
+
 density(ndp::NullDensityParam,x::Real) = ndp.a * exp(-(ndp.b*x^2 - ndp.c*x + ndp.d))
-density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ) # 
+density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ) #
+
+
 function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     @assert length(x) == 2
     η, μ = x[1], x[2]
@@ -73,13 +83,12 @@ function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     density(mm.npd,μ) * modification
 end
 
-function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Real)
+function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Real=2.0)
     postvar = 1 /(sum(1./var) + 1./τ)
     postmean = postvar * sum(z./var)
     Normal(postmean, sqrt(postvar))
 end
 
-#density(::LikelihoodPrior)
 
 function import_sampledata(h5file, name)
     out = h5open(h5file, "r") do file
