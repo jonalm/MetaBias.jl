@@ -1,7 +1,7 @@
 module MetaBias
 export NullLikelihoodPrior,MixModelLikelihoodPrior, NullPosterior, reset_τ, import_sampledata, density
 
-using Distributions: Normal
+using Distributions: Normal, cdf
 using HDF5: h5open
 
 abstract LikelihoodPrior
@@ -63,6 +63,8 @@ function Ni(μ, σ, Z)
     1.0 - cdf(nd,σ*Z) + cdf(nd,-σ*Z)
 end
 
+density(ndp::NullDensityParam,x::Real) = ndp.a * exp(-(ndp.b*x^2 - ndp.c*x + ndp.d))
+density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ)
 function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
     N = length(x)
     res = Array(eltype(x),N)
@@ -72,15 +74,21 @@ function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
     res
 end
 
-density(ndp::NullDensityParam,x::Real) = ndp.a * exp(-(ndp.b*x^2 - ndp.c*x + ndp.d))
-density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ) #
-
-
 function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     @assert length(x) == 2
     η, μ = x[1], x[2]
-    modification = reduce(*,[η + (1-η)*Ni(μ,σᵢ,mm.Z) for σᵢ in mm.σ₁]) + η^mm.N₀
-    density(mm.npd,μ) * modification
+    @assert 0. <= η <= 1.
+    modification = reduce(*,[η + (1-η)*Ni(μ,σᵢ,mm.Z) for σᵢ in mm.σ₁]) * η^mm.N₀
+    println(η, "\t",μ,"\t", modification)
+    density(mm.ndp,μ) * modification
+end
+function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
+    N = size(x)[2]
+    res = Array(eltype(x),N)
+    for i in 1:N
+        x[i] = density(mm, x[:,i])
+    end
+    res
 end
 
 function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Real=2.0)
