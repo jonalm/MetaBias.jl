@@ -79,14 +79,13 @@ function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     η, μ = x[1], x[2]
     @assert 0. <= η <= 1.
     modification = reduce(*,[η + (1-η)*Ni(μ,σᵢ,mm.Z) for σᵢ in mm.σ₁]) * η^mm.N₀
-    println(η, "\t",μ,"\t", modification)
     density(mm.ndp,μ) * modification
 end
 function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
     N = size(x)[2]
     res = Array(eltype(x),N)
     for i in 1:N
-        x[i] = density(mm, x[:,i])
+        res[i] = density(mm, x[:,i])
     end
     res
 end
