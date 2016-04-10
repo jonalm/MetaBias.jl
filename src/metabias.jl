@@ -1,7 +1,7 @@
 module MetaBias
-export NullLikelihoodPrior,MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, length
+export NullLikelihoodPrior,MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, length, rand, pdf
 
-using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution, @check_args
+using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
 
 # extending
@@ -17,18 +17,17 @@ immutable MixModel <: ContinuousUnivariateDistribution
     nd::Normal
 
     function MixModel(η::Real, μ::Real, σ2::Real, Z::Real)
-        @check_args(MixModel, zero(η)<= η <= one(η) && zero(σ2) < σ2  && zero(Z) < Z)
         σ = sqrt(σ2)
         new(σ, Z, Bernoulli(η), Normal(μ,σ))
     end
 end
 MixModel(η::Real, μ::Real, σ2::Real) = MixModel(η, μ, σ2, 1.96)
-pdf(d::MixModel,x) = pdf(d.nd,x) * (d.bd.p + (1-d.bd.p)*norm_const(nd,d.σ,d.Z)*(x > d.Z*d.σ))
+pdf(d::MixModel,x) = pdf(d.nd,x) * (d.bd.p + (1-d.bd.p)*norm_const(d.nd,d.σ,d.Z)*(x > d.Z*d.σ))
 
 function rand(d::MixModel)
     honest = rand(d.bd)
     x = rand(d.nd)
-    honest ? x : (d.Z*d.σ < x ? x : rand(d)) 
+    honest==1 ? x : (d.Z*d.σ < x ? x : rand(d)) 
 end
 
 immutable NullDensityParam
