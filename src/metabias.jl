@@ -11,23 +11,28 @@ import Distributions: rand, pdf
 abstract LikelihoodPrior
 
 immutable MixModel <: ContinuousUnivariateDistribution
-    σ::Float64
-    Z::Float64
     bd::Bernoulli
     nd::Normal
-
+    σ::Float64
+    Z::Float64
+    
     function MixModel(η::Real, μ::Real, σ2::Real, Z::Real)
         σ = sqrt(σ2)
-        new(σ, Z, Bernoulli(η), Normal(μ,σ))
+        new(Bernoulli(η), Normal(μ,σ), σ, Z)
     end
 end
 MixModel(η::Real, μ::Real, σ2::Real) = MixModel(η, μ, σ2, 1.96)
-pdf(d::MixModel,x) = pdf(d.nd,x) * (d.bd.p + (1-d.bd.p)*norm_const(d.nd,d.σ,d.Z)*(x > d.Z*d.σ))
+heaviside(x) = 0.5*(sign(x)+1)
+pdf(d::MixModel,x::Real) = pdf(d.nd,x) * (d.bd.p + (1-d.bd.p)*norm_const(d.nd,d.σ,d.Z)*heaviside(abs(x) - d.Z*d.σ))
+
+function rand_dishonest(d::MixModel)
+    x = rand(d.nd)
+    d.Z*d.σ < abs(x) ? x : rand_dishonest(d)
+end
 
 function rand(d::MixModel)
     honest = rand(d.bd)
-    x = rand(d.nd)
-    honest==1 ? x : (d.Z*d.σ < x ? x : rand(d)) 
+    honest==1 ? rand(d.nd) : rand_dishonest(d)
 end
 
 immutable NullDensityParam
