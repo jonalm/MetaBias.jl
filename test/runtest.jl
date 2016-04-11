@@ -66,3 +66,18 @@ facts("Test single vs multiple input for density(MixModelLikelihoodPrior, x)") d
         @fact density(mmlp, a) --> roughly(density(mmlp, b)[1])
     end
 end
+
+facts("Test logpdf(MixModel) is consisitent with log(density(MixModelLikelihoodPrior))") do
+    η, μ = 0.9, 0.2
+    τ = 2.0
+    Z = 1.96
+
+    logres1 = logpdf(Normal(0.0,τ), μ) #prior
+    for (zii, vii) in zip(zi[1:2], vi[1:2])
+        logres1 += logpdf(MixModel(η,μ,vii,Z), zii)
+    end
+    
+    mmlp = MixModelLikelihoodPrior(zi[1:2],vi[1:2],τ,Z)
+    logres2 = log(density(mmlp, [η,μ]))
+    @fact logres1 --> roughly(logres2)
+end
