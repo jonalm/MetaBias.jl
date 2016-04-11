@@ -16,12 +16,11 @@ immutable MixModel <: ContinuousUnivariateDistribution
     σ::Float64
     Z::Float64
     
-    function MixModel(η::Real, μ::Real, σ2::Real, Z::Real)
+    function MixModel(η::Real, μ::Real, σ2::Real, Z::Real=1.96)
         σ = sqrt(σ2)
         new(Bernoulli(η), Normal(μ,σ), σ, Z)
     end
 end
-MixModel(η::Real, μ::Real, σ2::Real) = MixModel(η, μ, σ2, 1.96)
 heaviside(x) = 0.5*(sign(x)+1)
 pdf(d::MixModel,x::Real) = pdf(d.nd,x) * (d.bd.p + (1-d.bd.p)*norm_const(d.nd,d.σ,d.Z)*heaviside(abs(x) - d.Z*d.σ))
 
