@@ -72,7 +72,7 @@ facts("Test logpdf(MixModel) is consisitent with log(density(MixModelLikelihoodP
     τ = 2.0
     Z = 1.96
 
-    logres1 = logpdf(Normal(0.0,τ), μ) #prior
+    logres1 = logpdf(Normal(0.0,sqrt(τ)), μ) #prior
     for (zii, vii) in zip(zi[1:2], vi[1:2])
         logres1 += logpdf(MixModel(η,μ,vii,Z), zii)
     end
