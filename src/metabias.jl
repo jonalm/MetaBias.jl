@@ -1,5 +1,5 @@
 module MetaBias
-export NullLikelihoodPrior,MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, length, rand, pdf
+export NullLikelihoodPrior,MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, logdensity, length, rand, pdf
 
 using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
@@ -95,8 +95,19 @@ function norm_const(μ::Real, σ::Real, Z::Real)
 end
 
 logdensity(ndp::NullDensityParam,x::Real) = log(ndp.a)-(ndp.b*x^2 - ndp.c*x + ndp.d)
+function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
+    @assert length(x) == 2
+    η, μ, σ₁, N₀, Z = x[1], x[2], mm.σ₁, mm.N₀, mm.Z
+    @assert 0. <= η <= 1.
+    modification = reduce(+,[log(η + (1-η)*norm_const(μ,σᵢ,Z)) for σᵢ in σ₁]) + N₀*log(η)
+    logdensity(mm.ndp,μ) + modification
+end
+density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
+
+
 density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
 density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ)
+
 function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
     N = length(x)
     res = Array(eltype(x),N)
@@ -106,18 +117,20 @@ function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
     res
 end
 
-function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
-    @assert length(x) == 2
-    η, μ, σ₁, N₀, Z = x[1], x[2], mm.σ₁, mm.N₀, mm.Z
-    @assert 0. <= η <= 1.
-    modification = reduce(*,[η + (1-η)*norm_const(μ,σᵢ,Z) for σᵢ in σ₁]) * η^N₀
-    density(mm.ndp,μ) * modification
-end
 function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
     N = size(x)[2]
     res = Array(eltype(x),N)
     for i in 1:N
         res[i] = density(mm, x[:,i])
+    end
+    res
+end
+
+function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
+    N = size(x)[2]
+    res = Array(eltype(x),N)
+    for i in 1:N
+        res[i] = logdensity(mm, x[:,i])
     end
     res
 end
