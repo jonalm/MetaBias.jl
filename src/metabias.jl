@@ -94,7 +94,8 @@ function norm_const(μ::Real, σ::Real, Z::Real)
     norm_const(nd, σ, Z)
 end
 
-density(ndp::NullDensityParam,x::Real) = ndp.a * exp(-(ndp.b*x^2 - ndp.c*x + ndp.d))
+logdensity(ndp::NullDensityParam,x::Real) = log(ndp.a)-(ndp.b*x^2 - ndp.c*x + ndp.d)
+density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
 density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ)
 function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
     N = length(x)
