@@ -104,7 +104,6 @@ function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
 end
 density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
 
-
 density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
 density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ)
 
