@@ -1,12 +1,13 @@
 module MetaBias
-export NullLikelihoodPrior,MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, logdensity, length, rand, pdf
+export NullLikelihoodPrior,MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, logdensity, length, rand, pdf, mass, mean, var
 
 using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
+using Cubature: hquadrature
 
 # extending
 import Base: length
-import Distributions: rand, pdf
+import Distributions: rand, pdf, mean, var
 
 abstract LikelihoodPrior
 
@@ -35,20 +36,24 @@ function rand(d::MixModel)
 end
 
 immutable NullDensityParam
+    # paramaeters for likelihood, L(x) = a * exp(b x^2 + c x + d)
+    # τ is prior variance, stored for convenience, see "reset_τ(::NullDensityParam,τ::Real)"
     a::Float64
     b::Float64
     c::Float64
     d::Float64
     τ::Float64
 end
+mean(ndp::NullDensityParam) = var(ndp) * ndp.c
+var(ndp::NullDensityParam) = 1.0 / (2*ndp.b)
 
 function NullDensityParam{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Real)
     N = length(z)
     @assert N==length(var)
     @assert N>0
     a = (2pi)^(-(N+1)/2.0) / sqrt(reduce(*,var)) / sqrt(τ)
-    b = sum(1./var)/2 + 1.0/(2τ)
-    c = sum(z./var)
+    b = sum(1./var)/2 + 1.0/(2τ) #  ≃ 2 / Variance
+    c = sum(z./var) 
     d = sum(z.^2./var) / 2.0
     NullDensityParam(a,b,c,d,τ)
 end
@@ -103,7 +108,6 @@ function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     logdensity(mm.ndp,μ) + modification
 end
 density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
-
 density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
 density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ)
 
@@ -114,6 +118,14 @@ function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
         res[i] = density(null, x[i])
     end
     res
+end
+
+function mass(mm::MixModelLikelihoodPrior)
+    
+end
+function mass(mm::NullLikelihoodPrior)
+    f(x) = density(mm, x)
+    (val,err) = hquadrature(f,)
 end
 
 function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})

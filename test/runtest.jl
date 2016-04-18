@@ -19,7 +19,6 @@ facts("equal default hyper parameter τ in Null and MixModel") do
     lp0 = NullLikelihoodPrior(zi,vi)
     lp1 = MixModelLikelihoodPrior(zi,vi)
     @fact lp0.ndp.τ --> lp1.ndp.τ
-    @fact lp0.ndp.τ --> lp1.ndp.τ
 end
 
 facts("updating τ is consistent with calculating from scratch") do
@@ -29,6 +28,14 @@ facts("updating τ is consistent with calculating from scratch") do
         lp1 = LP(zi,vi,3.0)
         @fact lp0.ndp --> lp1.ndp
     end
+end
+
+facts("mean and var are consistent for NullDensityParam and NullPosterior") do
+    τ = 3.3
+    ndp = MetaBias.NullDensityParam(zi,vi,τ)
+    np = NullPosterior(zi,vi,τ)
+    @fact var(ndp) --> roughly(var(np))
+    @fact mean(ndp) --> roughly(mean(np))
 end
 
 facts("Null likelihod prior density proportioal to null pdf") do
