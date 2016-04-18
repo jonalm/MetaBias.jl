@@ -38,7 +38,7 @@ facts("mean and var are consistent for NullDensityParam and NullPosterior") do
     @fact mean(ndp) --> roughly(mean(np))
 end
 
-facts("Null likelihod prior density proportioal to null pdf") do
+facts("Null likelihood prior density proportioal to null pdf") do
     τ = 3.0
     np = NullPosterior(zi,vi,τ)
     nlp = NullLikelihoodPrior(zi,vi,τ)
@@ -49,6 +49,16 @@ facts("Null likelihod prior density proportioal to null pdf") do
     end
 end
 
+facts("Normalised Null likelihood prior is consistent with null pdf") do
+    τ = 3.0
+    np = NullPosterior(zi,vi,τ)
+    nlp = NullLikelihoodPrior(zi,vi,τ)
+    m = mass(nlp)
+    unity_vec = (density(nlp, r) / m) ./ pdf(np, r)
+    for u in unity_vec
+        @fact u --> roughly(1.0)
+    end
+end
 
 facts("Test η=1 corresponds to Null") do
     mmlp = MixModelLikelihoodPrior(zi,vi)

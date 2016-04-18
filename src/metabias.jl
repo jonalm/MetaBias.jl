@@ -46,6 +46,7 @@ immutable NullDensityParam
 end
 mean(ndp::NullDensityParam) = var(ndp) * ndp.c
 var(ndp::NullDensityParam) = 1.0 / (2*ndp.b)
+std(ndp::NullDensityParam) = sqrt(var(ndp))
 
 function NullDensityParam{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Real)
     N = length(z)
@@ -121,11 +122,13 @@ function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
 end
 
 function mass(mm::MixModelLikelihoodPrior)
-    
+ 
 end
 function mass(mm::NullLikelihoodPrior)
     f(x) = density(mm, x)
-    (val,err) = hquadrature(f,)
+    m, s = mean(mm.ndp), std(mm.ndp)
+    (val,err) = hquadrature(f, m - 10*s, m + 10*s)
+    val
 end
 
 function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
