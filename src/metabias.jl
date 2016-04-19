@@ -1,15 +1,12 @@
 module MetaBias
-export NullLikelihoodPrior,MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, logdensity, length, rand, pdf, mass, mean, var
+export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, nulldensity, mass, nullmass, mean, var, rand, pdf
 
 using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
 using Cubature: hquadrature
 
 # extending
-import Base: length
 import Distributions: rand, pdf, mean, var
-
-abstract LikelihoodPrior
 
 immutable MixModel <: ContinuousUnivariateDistribution
     bd::Bernoulli
@@ -37,7 +34,7 @@ end
 
 immutable NullDensityParam
     # paramaeters for likelihood, L(x) = a * exp(b x^2 + c x + d)
-    # τ is prior variance, stored for convenience, see "reset_τ(::NullDensityParam,τ::Real)"
+    # τ is prior var, see "reset_τ(::NullDensityParam,τ::Real)"
     a::Float64
     b::Float64
     c::Float64
@@ -60,24 +57,12 @@ function NullDensityParam{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Rea
     NullDensityParam(a,b,c,d,τ)
 end
 
-type NullLikelihoodPrior <: LikelihoodPrior
-    ndp::NullDensityParam
-end
-
-function NullLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Float64=2.0)
-    NullLikelihoodPrior(NullDensityParam(z,var,τ))
-end
-
-type MixModelLikelihoodPrior <: LikelihoodPrior
+type MixModelLikelihoodPrior
     ndp::NullDensityParam
     z₁::Array{Float64,1} # significant z values
     σ₁::Array{Float64,1} # significant σ = sqrt(var))
     N₀::Int64 # number of non significant data, lenght(z) = length(z₁) + N₀
     Z::Float64 # z-score corresponding to test significance level
-end
-
-function NullLikelihoodPrior(mlp::MixModelLikelihoodPrior)
-    NullLikelihoodPrior(mlp.ndp)
 end
 
 function MixModelLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Float64=2.0,Z::Float64=1.96)
@@ -86,14 +71,14 @@ function MixModelLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},
     MixModelLikelihoodPrior(NullDensityParam(z,var,τ), z[idx],σ[idx],length(idx)-sum(idx),Z)
 end
 
-function reset_τ(ndp::NullDensityParam, τ)
+function reset_τ(ndp::NullDensityParam, τ::Real)
     a = ndp.a * sqrt(ndp.τ) / sqrt(τ)
     b = ndp.b - 1.0/(2ndp.τ) + 1.0/(2τ)
     NullDensityParam(a,b,ndp.c,ndp.d,τ)
 end
-function reset_τ(lp::LikelihoodPrior,τ)
-    lp.ndp = reset_τ(lp.ndp, τ)
-    lp
+function reset_τ(mm::MixModelLikelihoodPrior, τ::Real)
+    mm.ndp = reset_τ(mm.ndp, τ)
+    mm
 end
 
 function norm_const(nd::Normal, σ::Real, Z::Real)
@@ -115,13 +100,13 @@ function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
 end
 density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
 density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
-density(null::NullLikelihoodPrior,μ::Real) = density(null.ndp,μ)
+nulldensity(mm::MixModelLikelihoodPrior, x::Real) = exp(logdensity(mm.ndp,x))
 
-function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
+function nulldensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     N = length(x)
     res = Array(eltype(x),N)
     for i in 1:N
-        res[i] = density(null, x[i])
+        res[i] = nulldensity(mm, x[i])
     end
     res
 end
@@ -143,9 +128,9 @@ function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
     res
 end
 
-function mass(null::NullLikelihoodPrior)
-    f(x) = density(null, x)
-    m, s = mean(null.ndp), std(null.ndp)
+function nullmass(mm::MixModelLikelihoodPrior)
+    f(x) = nulldensity(mm, x)
+    m, s = mean(mm.ndp), std(mm.ndp)
     (val,err) = hquadrature(f, m - 10*s, m + 10*s)
     val
 end
@@ -187,12 +172,12 @@ function pdf_given_μ(mm::MixModelLikelihoodPrior, η::Real)
     
 end
 
-function log10_bayesfactor(model::MixModelLikelihoodPrior)
-    null = NullLikelihoodPrior(model)
-    log10(mass(model)) - log10(mass(null))
+function log10_bayesfactor(mm::MixModelLikelihoodPrior)
+    log10(mass(mm)) - log10(nullmass(mm))
 end
-function bayesfactor(model::MixModelLikelihoodPrior)
-    10^log10_bayesfactor(model)
+
+function bayesfactor(mm::MixModelLikelihoodPrior)
+    10^log10_bayesfactor(mm)
 end
 
 # functions for test purposes

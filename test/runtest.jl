@@ -9,25 +9,11 @@ zi, vi = import_sampledata("../data/sampledata.hdf5", "/konstantopoulos");
 np = NullPosterior(zi,vi)
 r = randn(5)*2*std(np) + mean(np)
 
-facts("abcd parameters equal in Null and MixModel") do
-    lp0 = NullLikelihoodPrior(zi,vi)
-    lp1 = MixModelLikelihoodPrior(zi,vi)
-    @fact lp0.ndp --> lp1.ndp
-end
-
-facts("equal default hyper parameter τ in Null and MixModel") do
-    lp0 = NullLikelihoodPrior(zi,vi)
-    lp1 = MixModelLikelihoodPrior(zi,vi)
-    @fact lp0.ndp.τ --> lp1.ndp.τ
-end
-
 facts("updating τ is consistent with calculating from scratch") do
-    for LP in (NullLikelihoodPrior,MixModelLikelihoodPrior)
-        lp0 = LP(zi,vi,2.0)
-        lp0 = reset_τ(lp0, 3.0)
-        lp1 = LP(zi,vi,3.0)
-        @fact lp0.ndp --> lp1.ndp
-    end
+    lp0 = MixModelLikelihoodPrior(zi,vi,2.0)
+    lp0 = reset_τ(lp0, 3.0)
+    lp1 = MixModelLikelihoodPrior(zi,vi,3.0)
+    @fact lp0.ndp --> lp1.ndp
 end
 
 facts("mean and var are consistent for NullDensityParam and NullPosterior") do
@@ -41,8 +27,8 @@ end
 facts("Null likelihood prior density proportioal to null pdf") do
     τ = 3.0
     np = NullPosterior(zi,vi,τ)
-    nlp = NullLikelihoodPrior(zi,vi,τ)
-    ratio_vec = pdf(np, r) ./ density(nlp, r)
+    mm = MixModelLikelihoodPrior(zi,vi,τ)
+    ratio_vec = pdf(np, r) ./ nulldensity(mm, r)
     ratio = ratio_vec[1]
     for i in 2:length(r)
         @fact ratio_vec[i] --> roughly(ratio)
@@ -52,26 +38,25 @@ end
 facts("Normalised Null likelihood prior is consistent with null pdf") do
     τ = 3.0
     np = NullPosterior(zi,vi,τ)
-    nlp = NullLikelihoodPrior(zi,vi,τ)
-    m = mass(nlp)
-    unity_vec = (density(nlp, r) / m) ./ pdf(np, r)
+    mm = MixModelLikelihoodPrior(zi,vi,τ)
+    m = nullmass(mm)
+    unity_vec = (nulldensity(mm, r) / m) ./ pdf(np, r)
     for u in unity_vec
         @fact u --> roughly(1.0)
     end
 end
 
 facts("Test η=1 corresponds to Null") do
-    mmlp = MixModelLikelihoodPrior(zi,vi)
-    nlp  = NullLikelihoodPrior(zi,vi)
+    mm = MixModelLikelihoodPrior(zi,vi)
     for ri in r
-        @fact density(nlp,ri) --> roughly(density(mmlp, [1., ri]))
+        @fact nulldensity(mm,ri) --> roughly(density(mm, [1., ri]))
     end
 end
 
 facts("Test single vs multiple input for density(NullLikelihoodPrior, x)") do
-    nlp = NullLikelihoodPrior(zi,vi)
+    mm = MixModelLikelihoodPrior(zi,vi)
     for ri in r
-        @fact density(nlp, ri) --> roughly(density(nlp, [ri])[1])
+        @fact nulldensity(mm, ri) --> roughly(nulldensity(mm, [ri])[1])
     end
 end
 
@@ -94,7 +79,7 @@ facts("Test logpdf(MixModel) is consisitent with logdensity(MixModelLikelihoodPr
         end
 
         mmlp = MixModelLikelihoodPrior(zi,vi,τ,Z)
-        logres2 = logdensity(mmlp, [η,μ])
+        logres2 = MetaBias.logdensity(mmlp, [η,μ])
         @fact logres1 --> roughly(logres2)
     end
 end
