@@ -44,6 +44,7 @@ immutable NullDensityParam
     d::Float64
     τ::Float64
 end
+
 mean(ndp::NullDensityParam) = var(ndp) * ndp.c
 var(ndp::NullDensityParam) = 1.0 / (2*ndp.b)
 std(ndp::NullDensityParam) = sqrt(var(ndp))
@@ -73,6 +74,10 @@ type MixModelLikelihoodPrior <: LikelihoodPrior
     σ₁::Array{Float64,1} # significant σ = sqrt(var))
     N₀::Int64 # number of non significant data, lenght(z) = length(z₁) + N₀
     Z::Float64 # z-score corresponding to test significance level
+end
+
+function NullLikelihoodPrior(mlp::MixModelLikelihoodPrior)
+    NullLikelihoodPrior(mlp.ndp)
 end
 
 function MixModelLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Float64=2.0,Z::Float64=1.96)
@@ -120,17 +125,6 @@ function density{T<:Real}(null::NullLikelihoodPrior, x::Array{T,1})
     end
     res
 end
-
-function mass(mm::MixModelLikelihoodPrior)
- 
-end
-function mass(mm::NullLikelihoodPrior)
-    f(x) = density(mm, x)
-    m, s = mean(mm.ndp), std(mm.ndp)
-    (val,err) = hquadrature(f, m - 10*s, m + 10*s)
-    val
-end
-
 function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
     N = size(x)[2]
     res = Array(eltype(x),N)
@@ -149,6 +143,59 @@ function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
     res
 end
 
+function mass(null::NullLikelihoodPrior)
+    f(x) = density(null, x)
+    m, s = mean(null.ndp), std(null.ndp)
+    (val,err) = hquadrature(f, m - 10*s, m + 10*s)
+    val
+end
+
+function mass(mm::MixModelLikelihoodPrior)
+    f(x) = density(mm, x)
+    m, s = mean(mm.ndp), std(mm.ndp)
+    (val,err) = hcubature(f, [0,m - 10*s], [1,m + 10*s])
+    val
+end
+
+function mass_fixed_η(mm::MixModelLikelihoodPrior, η::Real)
+    f(x) = density(mm, [η,x])
+    m, s = mean(mm.ndp), std(mm.ndp)
+    (val,err) = hquadrature(f, m - 10*s, m + 10*s)
+    val
+end
+
+function mass_fixed_μ(mm::MixModelLikelihoodPrior, η::Real)
+    f(x) = density(mm, [η,x])
+    m, s = mean(mm.ndp), std(mm.ndp)
+    (val,err) = hquadrature(f, m - 10*s, m + 10*s)
+    val
+end
+
+function pdf_given_μ(mm::MixModelLikelihoodPrior, η::Real)
+    norm = mass_fixed_η(mm, η)
+    f(μ) = density(mm, [η, μ]) / norm
+end
+
+function pdf_given_μ(mm::MixModelLikelihoodPrior, μ::Real)
+    norm = mass_fixed_μ(mm, η)
+    f(η) = density(mm, [η, μ]) / norm
+    f
+end
+
+
+function pdf_given_μ(mm::MixModelLikelihoodPrior, η::Real)
+    
+end
+
+function log10_bayesfactor(model::MixModelLikelihoodPrior)
+    null = NullLikelihoodPrior(model)
+    log10(mass(model)) - log10(mass(null))
+end
+function bayesfactor(model::MixModelLikelihoodPrior)
+    10^log10_bayesfactor(model)
+end
+
+# functions for test purposes
 function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Real=2.0)
     postvar = 1 /(sum(1./var) + 1./τ)
     postmean = postvar * sum(z./var)
@@ -163,4 +210,5 @@ function import_sampledata(h5file, name)
     end
     return out
 end
+
 end
