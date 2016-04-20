@@ -32,15 +32,15 @@ function rand(d::MixModel)
     honest==1 ? rand(d.nd) : rand_dishonest(d)
 end
 
-immutable NullDensityParam
-    # paramaeters for likelihood, L(x) = a * exp(-b x^2 + c x - d)
-    # τ is prior var, see "reset_τ(::NullDensityParam,τ::Real)"
-    a::Float64
-    b::Float64
-    c::Float64
-    d::Float64
-    τ::Float64
-end
+# immutable NullDensityParam
+#     # paramaeters for likelihood, L(x) = a * exp(-b x^2 + c x - d)
+#     # τ is prior var, see "reset_τ(::NullDensityParam,τ::Real)"
+#     a::Float64
+#     b::Float64
+#     c::Float64
+#     d::Float64
+#     τ::Float64
+# end
 
 mean(ndp::NullDensityParam) = - var(ndp) * ndp.c
 var(ndp::NullDensityParam) = 1.0 / (2*ndp.b)
