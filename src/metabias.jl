@@ -21,41 +21,38 @@ immutable MixModel <: ContinuousUnivariateDistribution
 end
 heaviside(x) = 0.5*(sign(x)+1)
 pdf(d::MixModel,x::Real) = pdf(d.nd,x) * (d.bd.p + (1-d.bd.p)*norm_const(d.nd,d.σ,d.Z)*heaviside(abs(x) - d.Z*d.σ))
-
 function rand_dishonest(d::MixModel)
     x = rand(d.nd)
     d.Z*d.σ < abs(x) ? x : rand_dishonest(d)
 end
-
 function rand(d::MixModel)
     honest = rand(d.bd)
     honest==1 ? rand(d.nd) : rand_dishonest(d)
 end
 
-# immutable NullDensityParam
-#     # paramaeters for likelihood, L(x) = a * exp(-b x^2 + c x - d)
-#     # τ is prior var, see "reset_τ(::NullDensityParam,τ::Real)"
-#     a::Float64
-#     b::Float64
-#     c::Float64
-#     d::Float64
-#     τ::Float64
-# end
-
-mean(ndp::NullDensityParam) = - var(ndp) * ndp.c
-var(ndp::NullDensityParam) = 1.0 / (2*ndp.b)
-std(ndp::NullDensityParam) = sqrt(var(ndp))
-
-function NullDensityParam{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Real)
-    N = length(z)
-    @assert N==length(var)
-    @assert N>0
-    a = (2pi)^(-(N+1)/2.0) / sqrt(reduce(*,var)) / sqrt(τ)
-    b = sum(1./var)/2 + 1.0/(2τ) #  ≃ 2 / Variance
-    c = - sum(z./var)
-    d = sum(z.^2./var) / 2.0
-    NullDensityParam(a,b,c,d,τ)
+immutable NullDensityParam
+    # paramaeters for likelihood x prior
+    # L(x) prior(x) =  exp[-(a x^2 + b x + c)]
+    a::Float64
+    b::Float64
+    c::Float64
+    σ_prior::Float64
 end
+function NullDensityParam{S<:Real,T<:Real}(y::Array{S,1},var::Array{T,1},var_prior::Real)
+    σ = sqrt(var)
+    N = length(y)
+    @assert N==length(σ)
+    @assert N>0
+    #var = σ.^2
+    σ_prior = sqrt(var_prior)
+    a = 0.5 * (sum(1./var) + 1/σ_prior^2)
+    b = - sum(y./var)
+    c = 0.5*sum(y.^2./var) + sum(log(σ)) + log(σ_prior) + 0.5*(N+1)*log(2π)
+    NullDensityParam(a,b,c,σ_prior)
+end
+var(ndp::NullDensityParam) = 1 / (2*ndp.a)
+mean(ndp::NullDensityParam) = - var(ndp) * ndp.b
+std(ndp::NullDensityParam) = sqrt(var(ndp))
 
 type MixModelLikelihoodPrior
     ndp::NullDensityParam
@@ -73,13 +70,14 @@ function MixModelLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},
     MixModelLikelihoodPrior(NullDensityParam(z,var,τ), z,z[idx],σ,σ[idx],length(idx)-sum(idx),Z)
 end
 
-function reset_τ(ndp::NullDensityParam, τ::Real)
-    a = ndp.a * sqrt(ndp.τ) / sqrt(τ)
-    b = ndp.b - 1.0/(2ndp.τ) + 1.0/(2τ)
-    NullDensityParam(a,b,ndp.c,ndp.d,τ)
+function reset_τ(ndp::NullDensityParam, var_prior::Real)
+    σ_prior = sqrt(var_prior)
+    a = ndp.a - 1.0/(2ndp.σ_prior^2) + 1.0/(2σ_prior^2)
+    c = ndp.c - log(ndp.σ_prior) + log(σ_prior)
+    NullDensityParam(a,ndp.b,c,σ_prior)
 end
-function reset_τ(mm::MixModelLikelihoodPrior, τ::Real)
-    mm.ndp = reset_τ(mm.ndp, τ)
+function reset_τ(mm::MixModelLikelihoodPrior, var_prior::Real)
+    mm.ndp = reset_τ(mm.ndp, var_prior)
     mm
 end
 
@@ -92,7 +90,7 @@ function norm_const(μ::Real, σ::Real, Z::Real)
     norm_const(nd, σ, Z)
 end
 
-logdensity(ndp::NullDensityParam,x::Real) = log(ndp.a)-(ndp.b*x^2 + ndp.c*x + ndp.d)
+logdensity(ndp::NullDensityParam,x::Real) = -(ndp.a*x^2 + ndp.b*x + ndp.c)
 function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     @assert length(x) == 2
     η, μ, σ₁, N₀, Z = x[1], x[2], mm.σ₁, mm.N₀, mm.Z

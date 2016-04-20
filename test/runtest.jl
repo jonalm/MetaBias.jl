@@ -6,6 +6,8 @@ srand(42) # fixed random seed
 
 # data used in tests
 zi, vi = import_sampledata("../data/sampledata.hdf5", "/konstantopoulos");
+y = zi
+σ = sqrt(vi)
 np = NullPosterior(zi,vi)
 r = randn(5)*2*std(np) + mean(np)
 
