@@ -42,7 +42,7 @@ immutable NullDensityParam
     τ::Float64
 end
 
-mean(ndp::NullDensityParam) = var(ndp) * ndp.c
+mean(ndp::NullDensityParam) = - var(ndp) * ndp.c
 var(ndp::NullDensityParam) = 1.0 / (2*ndp.b)
 std(ndp::NullDensityParam) = sqrt(var(ndp))
 
@@ -52,7 +52,7 @@ function NullDensityParam{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Rea
     @assert N>0
     a = (2pi)^(-(N+1)/2.0) / sqrt(reduce(*,var)) / sqrt(τ)
     b = sum(1./var)/2 + 1.0/(2τ) #  ≃ 2 / Variance
-    c = sum(z./var)
+    c = - sum(z./var)
     d = sum(z.^2./var) / 2.0
     NullDensityParam(a,b,c,d,τ)
 end
@@ -92,7 +92,7 @@ function norm_const(μ::Real, σ::Real, Z::Real)
     norm_const(nd, σ, Z)
 end
 
-logdensity(ndp::NullDensityParam,x::Real) = log(ndp.a)-(ndp.b*x^2 - ndp.c*x + ndp.d)
+logdensity(ndp::NullDensityParam,x::Real) = log(ndp.a)-(ndp.b*x^2 + ndp.c*x + ndp.d)
 function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     @assert length(x) == 2
     η, μ, σ₁, N₀, Z = x[1], x[2], mm.σ₁, mm.N₀, mm.Z
