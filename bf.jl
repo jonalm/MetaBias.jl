@@ -14,7 +14,7 @@ println(header)
 println("-"^length(header))
 for name in namevec
     zi, vi = import_sampledata(h5fn, name)
-    mm = MixModelLikelihoodPrior(zi, vi)
+    mm = MixModelLikelihoodPrior(zi, vi, 4.)
     bf = bayesfactor(mm)
     println(lpad(name, 16," ")*" | "*sprintf1("%10.3f", bf ))
 end

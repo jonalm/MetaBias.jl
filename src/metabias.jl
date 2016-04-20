@@ -1,9 +1,9 @@
 module MetaBias
-export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, nulldensity, mass, nullmass, mean, var, rand, pdf
+export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor
 
 using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
-using Cubature: hquadrature
+using Cubature: hquadrature, hcubature
 
 # extending
 import Distributions: rand, pdf, mean, var
@@ -33,7 +33,7 @@ function rand(d::MixModel)
 end
 
 immutable NullDensityParam
-    # paramaeters for likelihood, L(x) = a * exp(b x^2 + c x + d)
+    # paramaeters for likelihood, L(x) = a * exp(-b x^2 + c x - d)
     # τ is prior var, see "reset_τ(::NullDensityParam,τ::Real)"
     a::Float64
     b::Float64
@@ -59,7 +59,9 @@ end
 
 type MixModelLikelihoodPrior
     ndp::NullDensityParam
+    z::Array{Float64,1} # all data
     z₁::Array{Float64,1} # significant z values
+    σ::Array{Float64,1} # all
     σ₁::Array{Float64,1} # significant σ = sqrt(var))
     N₀::Int64 # number of non significant data, lenght(z) = length(z₁) + N₀
     Z::Float64 # z-score corresponding to test significance level
@@ -68,7 +70,7 @@ end
 function MixModelLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Float64=2.0,Z::Float64=1.96)
     σ = sqrt(var)
     idx =  abs(z) .> (σ * Z)
-    MixModelLikelihoodPrior(NullDensityParam(z,var,τ), z[idx],σ[idx],length(idx)-sum(idx),Z)
+    MixModelLikelihoodPrior(NullDensityParam(z,var,τ), z,z[idx],σ,σ[idx],length(idx)-sum(idx),Z)
 end
 
 function reset_τ(ndp::NullDensityParam, τ::Real)
@@ -96,10 +98,21 @@ function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     η, μ, σ₁, N₀, Z = x[1], x[2], mm.σ₁, mm.N₀, mm.Z
     @assert 0. <= η <= 1.
     modification = reduce(+,[log(η + (1-η)*norm_const(μ,σᵢ,Z)) for σᵢ in σ₁]) + N₀*log(η)
-    logdensity(mm.ndp,μ) + modification
+    logdensity(mm.ndp, μ) + modification
 end
 density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
 density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
+
+
+
+function testlogdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
+    @assert length(x) == 2
+    η, μ, σ₁, N₀, Z = x[1], x[2], mm.σ₁, mm.N₀, mm.Z
+    @assert 0. <= η <= 1.
+    for si in σ
+end
+
+
 nulldensity(mm::MixModelLikelihoodPrior, x::Real) = exp(logdensity(mm.ndp,x))
 
 function nulldensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
@@ -156,20 +169,9 @@ function mass_fixed_μ(mm::MixModelLikelihoodPrior, η::Real)
     val
 end
 
-function pdf_given_μ(mm::MixModelLikelihoodPrior, η::Real)
+function pdf_given_η(mm::MixModelLikelihoodPrior, η::Real)
     norm = mass_fixed_η(mm, η)
     f(μ) = density(mm, [η, μ]) / norm
-end
-
-function pdf_given_μ(mm::MixModelLikelihoodPrior, μ::Real)
-    norm = mass_fixed_μ(mm, η)
-    f(η) = density(mm, [η, μ]) / norm
-    f
-end
-
-
-function pdf_given_μ(mm::MixModelLikelihoodPrior, η::Real)
-    
 end
 
 function log10_bayesfactor(mm::MixModelLikelihoodPrior)
