@@ -96,3 +96,4 @@ facts("Test pdf(MixModel) is consisitent with density(MixModelLikelihoodPrior)")
         @fact exp(logres1) --> roughly(res2)
     end
 end
+

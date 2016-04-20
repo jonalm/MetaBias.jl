@@ -6,14 +6,14 @@ using HDF5: h5open
 using Cubature: hquadrature, hcubature
 
 # extending
-import Distributions: rand, pdf, mean, var
+import Distributions: rand, pdf, mean, var, std
 
 immutable MixModel <: ContinuousUnivariateDistribution
     bd::Bernoulli
     nd::Normal
     σ::Float64
     Z::Float64
-    
+
     function MixModel(η::Real, μ::Real, σ2::Real, Z::Real=1.96)
         σ = sqrt(σ2)
         new(Bernoulli(η), Normal(μ,σ), σ, Z)
@@ -52,7 +52,7 @@ function NullDensityParam{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Rea
     @assert N>0
     a = (2pi)^(-(N+1)/2.0) / sqrt(reduce(*,var)) / sqrt(τ)
     b = sum(1./var)/2 + 1.0/(2τ) #  ≃ 2 / Variance
-    c = sum(z./var) 
+    c = sum(z./var)
     d = sum(z.^2./var) / 2.0
     NullDensityParam(a,b,c,d,τ)
 end
@@ -103,14 +103,6 @@ end
 density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
 density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
 
-
-
-function testlogdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
-    @assert length(x) == 2
-    η, μ, σ₁, N₀, Z = x[1], x[2], mm.σ₁, mm.N₀, mm.Z
-    @assert 0. <= η <= 1.
-    for si in σ
-end
 
 
 nulldensity(mm::MixModelLikelihoodPrior, x::Real) = exp(logdensity(mm.ndp,x))
@@ -197,5 +189,4 @@ function import_sampledata(h5file, name)
     end
     return out
 end
-
 end
