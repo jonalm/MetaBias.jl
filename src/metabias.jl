@@ -37,17 +37,16 @@ immutable NullDensityParam
     c::Float64
     σ_prior::Float64
 end
-function NullDensityParam{S<:Real,T<:Real}(y::Array{S,1},var::Array{T,1},σ_prior::Real)
-    σ = sqrt(var)
-    N = length(y)
+function NullDensityParam{S<:Real,T<:Real}(effect::Array{S,1},σ::Array{T,1},σ_prior::Real)
+    #σ = sqrt(var)
+    N = length(effect)
     @assert N==length(σ)
     @assert N>0
-    #var = σ.^2
-    #σ_prior = sqrt(var_prior)
-    #σ_prior = var_prior
-    a = 0.5 * (sum(1./var) + 1/σ_prior^2)
-    b = - sum(y./var)
-    c = 0.5*sum(y.^2./var) + sum(log(σ)) + log(σ_prior) + 0.5*(N+1)*log(2π)
+    var = σ.^2
+    var_prior = σ_prior^2
+    a = 0.5 * (sum(1./var) + 1/var_prior)
+    b = - sum(effect./var)
+    c = 0.5*sum(effect.^2./var) + sum(log(σ)) + log(σ_prior) + 0.5*(N+1)*log(2π)
     NullDensityParam(a,b,c,σ_prior)
 end
 var(ndp::NullDensityParam) = 1 / (2*ndp.a)
@@ -64,10 +63,11 @@ type MixModelLikelihoodPrior
     Z::Float64 # z-score corresponding to test significance level
 end
 
-function MixModelLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},σ_prior::Float64=2.0,Z::Float64=1.96)
-    σ = sqrt(var)
-    idx =  abs(z) .> (σ * Z)
-    MixModelLikelihoodPrior(NullDensityParam(z,var,σ_prior), z,z[idx],σ,σ[idx],length(idx)-sum(idx),Z)
+function MixModelLikelihoodPrior{S<:Real,T<:Real}(effect::Array{S,1},σ::Array{T,1},σ_prior::Float64=2.0,Z::Float64=1.96)
+    #σ = sqrt(var)
+    idx =  abs(effect) .> (σ * Z)
+    MixModelLikelihoodPrior(NullDensityParam(effect,σ,σ_prior),
+                            effect,effect[idx],σ,σ[idx],length(idx)-sum(idx),Z)
 end
 
 function reset_τ(ndp::NullDensityParam, σ_prior::Real)
@@ -169,8 +169,10 @@ function bayesfactor(mm::MixModelLikelihoodPrior)
 end
 
 # functions for test purposes
-function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},σ_prior::Real=2.0)
-    postvar = 1 /(sum(1./var) + 1./σ_prior^2)
+function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},σ::Array{T,1},σ_prior::Real=2.0)
+    var = σ .^ 2
+    var_prior = σ_prior ^ 2
+    postvar = 1 /(sum(1./var) + 1./var_prior)
     postmean = postvar * sum(z./var)
     Normal(postmean, sqrt(postvar))
 end
