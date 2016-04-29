@@ -11,7 +11,7 @@ effect, variance = import_sampledata("../data/sampledata.hdf5", "/konstantopoulo
 np = NullPosterior(effect,σ)
 r = randn(5)*2*std(np) + mean(np)
 
-facts("updating τ is consistent with calculating from scratch") do
+facts("updating σ_prior is consistent with calculating from scratch") do
     lp0 = MixModelLikelihoodPrior(effect,σ,2.0)
     lp0 = reset_σ_prior(lp0, 3.0)
     lp1 = MixModelLikelihoodPrior(effect,σ,3.0)
@@ -19,18 +19,18 @@ facts("updating τ is consistent with calculating from scratch") do
 end
 
 facts("mean and var are consistent for NullDensityParam and NullPosterior") do
-    τ = 3.3
-    ndp = MetaBias.NullDensityParam(effect,σ,τ)
-    np = NullPosterior(effect,σ,τ)
+    σ_prior = 3.3
+    ndp = MetaBias.NullDensityParam(effect,σ,σ_prior)
+    np = NullPosterior(effect,σ,σ_prior)
     @fact std(ndp) --> roughly(std(np))
     @fact var(ndp) --> roughly(var(np))
     @fact mean(ndp) --> roughly(mean(np))
 end
 
 facts("Null likelihood prior density proportioal to null pdf") do
-    τ = 3.0
-    np = NullPosterior(effect,σ,τ)
-    mm = MixModelLikelihoodPrior(effect,σ,τ)
+    σ_prior = 3.0
+    np = NullPosterior(effect,σ,σ_prior)
+    mm = MixModelLikelihoodPrior(effect,σ,σ_prior)
     ratio_vec = pdf(np, r) ./ nulldensity(mm, r)
     ratio = ratio_vec[1]
     for i in 2:length(r)
@@ -39,11 +39,11 @@ facts("Null likelihood prior density proportioal to null pdf") do
 end
 
 facts("Normalised Null likelihood prior is consistent with null pdf") do
-    τ = 3.0
-    np = NullPosterior(effect,σ,τ)
-    mm = MixModelLikelihoodPrior(effect,σ,τ)
+    σ_prior = 3.0
+    np = NullPosterior(effect,σ,σ_prior)
+    mm = MixModelLikelihoodPrior(effect,σ,σ_prior)
     m = nullmass(mm)
-    unity_vec = (nulldensity(mm, r) / m) ./ pdf(np, r)
+    unity_vec = (nulldensity(mm,r) / m) ./ pdf(np,r)
     for u in unity_vec
         @fact u --> roughly(1.0)
     end
