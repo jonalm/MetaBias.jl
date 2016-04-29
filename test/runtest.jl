@@ -13,7 +13,7 @@ r = randn(5)*2*std(np) + mean(np)
 
 facts("updating τ is consistent with calculating from scratch") do
     lp0 = MixModelLikelihoodPrior(effect,σ,2.0)
-    lp0 = reset_τ(lp0, 3.0)
+    lp0 = reset_σ_prior(lp0, 3.0)
     lp1 = MixModelLikelihoodPrior(effect,σ,3.0)
     @fact lp0.ndp --> lp1.ndp
 end

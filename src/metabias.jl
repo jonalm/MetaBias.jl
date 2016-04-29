@@ -1,5 +1,5 @@
 module MetaBias
-export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_τ, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor
+export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_σ_prior, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor
 
 using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
@@ -64,19 +64,18 @@ type MixModelLikelihoodPrior
 end
 
 function MixModelLikelihoodPrior{S<:Real,T<:Real}(effect::Array{S,1},σ::Array{T,1},σ_prior::Float64=2.0,Z::Float64=1.96)
-    #σ = sqrt(var)
     idx =  abs(effect) .> (σ * Z)
     MixModelLikelihoodPrior(NullDensityParam(effect,σ,σ_prior),
                             effect,effect[idx],σ,σ[idx],length(idx)-sum(idx),Z)
 end
 
-function reset_τ(ndp::NullDensityParam, σ_prior::Real)
+function reset_σ_prior(ndp::NullDensityParam, σ_prior::Real)
     a = ndp.a - 1.0/(2ndp.σ_prior^2) + 1.0/(2σ_prior^2)
     c = ndp.c - log(ndp.σ_prior) + log(σ_prior)
     NullDensityParam(a,ndp.b,c,σ_prior)
 end
-function reset_τ(mm::MixModelLikelihoodPrior, σ_prior::Real)
-    mm.ndp = reset_τ(mm.ndp, σ_prior)
+function reset_σ_prior(mm::MixModelLikelihoodPrior, σ_prior::Real)
+    mm.ndp = reset_σ_prior(mm.ndp, σ_prior)
     mm
 end
 
