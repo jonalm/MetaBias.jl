@@ -181,9 +181,9 @@ end
 
 function import_sampledata(h5file, name)
     out = h5open(h5file, "r") do file
-        zi = read(file, name*"/zi")[:]
-        vi = read(file, name*"/vi")[:]
-        return zi, vi
+        z = read(file, name*"/Z_transformed_effects")[:]
+        v = read(file, name*"/variances")[:]
+        return z, v
     end
     return out
 end
