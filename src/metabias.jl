@@ -37,13 +37,14 @@ immutable NullDensityParam
     c::Float64
     σ_prior::Float64
 end
-function NullDensityParam{S<:Real,T<:Real}(y::Array{S,1},var::Array{T,1},var_prior::Real)
+function NullDensityParam{S<:Real,T<:Real}(y::Array{S,1},var::Array{T,1},σ_prior::Real)
     σ = sqrt(var)
     N = length(y)
     @assert N==length(σ)
     @assert N>0
     #var = σ.^2
-    σ_prior = sqrt(var_prior)
+    #σ_prior = sqrt(var_prior)
+    #σ_prior = var_prior
     a = 0.5 * (sum(1./var) + 1/σ_prior^2)
     b = - sum(y./var)
     c = 0.5*sum(y.^2./var) + sum(log(σ)) + log(σ_prior) + 0.5*(N+1)*log(2π)
@@ -63,20 +64,19 @@ type MixModelLikelihoodPrior
     Z::Float64 # z-score corresponding to test significance level
 end
 
-function MixModelLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Float64=2.0,Z::Float64=1.96)
+function MixModelLikelihoodPrior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},σ_prior::Float64=2.0,Z::Float64=1.96)
     σ = sqrt(var)
     idx =  abs(z) .> (σ * Z)
-    MixModelLikelihoodPrior(NullDensityParam(z,var,τ), z,z[idx],σ,σ[idx],length(idx)-sum(idx),Z)
+    MixModelLikelihoodPrior(NullDensityParam(z,var,σ_prior), z,z[idx],σ,σ[idx],length(idx)-sum(idx),Z)
 end
 
-function reset_τ(ndp::NullDensityParam, var_prior::Real)
-    σ_prior = sqrt(var_prior)
+function reset_τ(ndp::NullDensityParam, σ_prior::Real)
     a = ndp.a - 1.0/(2ndp.σ_prior^2) + 1.0/(2σ_prior^2)
     c = ndp.c - log(ndp.σ_prior) + log(σ_prior)
     NullDensityParam(a,ndp.b,c,σ_prior)
 end
-function reset_τ(mm::MixModelLikelihoodPrior, var_prior::Real)
-    mm.ndp = reset_τ(mm.ndp, var_prior)
+function reset_τ(mm::MixModelLikelihoodPrior, σ_prior::Real)
+    mm.ndp = reset_τ(mm.ndp, σ_prior)
     mm
 end
 
@@ -99,9 +99,6 @@ function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
 end
 density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
 density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
-
-
-
 nulldensity(mm::MixModelLikelihoodPrior, x::Real) = exp(logdensity(mm.ndp,x))
 
 function nulldensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
@@ -172,8 +169,8 @@ function bayesfactor(mm::MixModelLikelihoodPrior)
 end
 
 # functions for test purposes
-function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},τ::Real=2.0)
-    postvar = 1 /(sum(1./var) + 1./τ)
+function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},var::Array{T,1},σ_prior::Real=2.0)
+    postvar = 1 /(sum(1./var) + 1./σ_prior^2)
     postmean = postvar * sum(z./var)
     Normal(postmean, sqrt(postvar))
 end
