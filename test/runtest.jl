@@ -76,8 +76,8 @@ facts("Test logpdf(MixModel) is consisitent with logdensity(MixModelLikelihoodPr
     #test various parameters
     for (η,μ,σ_prior,Z) in ((0.9,0.2,2.0,1.96), (0.1,-1.0,4.0, 1.4), (0.5,0.0,2.4,1.2))
         logres1 = logpdf(Normal(0.0, σ_prior), μ) #prior
-        for (effecti, σi) in zip(effect, σ)
-            logres1 += logpdf(MixModel(η,μ,σi,Z), effecti)
+        for (effectᵢ, σᵢ) in zip(effect, σ)
+            logres1 += logpdf(MixModel(η,μ,σᵢ,Z), effectᵢ)
         end
 
         mmlp = MixModelLikelihoodPrior(effect,σ,σ_prior,Z)
@@ -90,8 +90,8 @@ facts("Test pdf(MixModel) is consisitent with density(MixModelLikelihoodPrior)")
     #test various parameters
     for (η,μ,σ_prior,Z) in ((0.9,0.2,2.0,1.96), (0.1,-1.0,4.0, 1.4), (0.5,0.0,2.4,1.2))
         logres1 = logpdf(Normal(0.0,σ_prior), μ) #prior
-        for (effecti, σi) in zip(effect, σ)
-            logres1 += logpdf(MixModel(η,μ,σi,Z), effecti)
+        for (effectᵢ, σᵢ) in zip(effect, σ)
+            logres1 += logpdf(MixModel(η,μ,σᵢ,Z), effectᵢ)
         end
 
         mmlp = MixModelLikelihoodPrior(effect,σ,σ_prior,Z)
