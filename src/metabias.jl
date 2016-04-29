@@ -14,8 +14,7 @@ immutable MixModel <: ContinuousUnivariateDistribution
     σ::Float64
     Z::Float64
 
-    function MixModel(η::Real, μ::Real, σ2::Real, Z::Real=1.96)
-        σ = sqrt(σ2)
+    function MixModel(η::Real, μ::Real, σ::Real, Z::Real=1.96)
         new(Bernoulli(η), Normal(μ,σ), σ, Z)
     end
 end
