@@ -54,9 +54,10 @@ std(ndp::NullDensityParam) = sqrt(var(ndp))
 
 type MixModelLikelihoodPrior
     ndp::NullDensityParam
-    sorted_effect::Array{Float64,1} # all data
-    sorted_σ::Array{Float64,1} # all
-    N_non_sigificant::Int64 # number of non significant data
+     # sorted data, such that significant σ can be accessed by sliceing the array
+    sorted_effect::Array{Float64,1}
+    sorted_σ::Array{Float64,1} 
+    N_non_significant::Int64 # number of non significant data
     Z::Float64 # z-score corresponding to test significance level
 end
 
@@ -100,7 +101,7 @@ logdensity(ndp::NullDensityParam,x::Real) = -(ndp.a*x^2 + ndp.b*x + ndp.c)
 function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     @assert length(x) == 2
     η, μ = x[1], x[2]
-    Nns, Z = mm.N_non_sigificant, mm.Z
+    Nns, Z = mm.N_non_significant, mm.Z
     sσ = mm.sorted_σ[Nns+1:end]
     @assert 0. <= η <= 1.
     modification = reduce(+,[log(η + (1-η)*norm_const(μ,σᵢ,Z)) for σᵢ in sσ]) + Nns*log(η)
