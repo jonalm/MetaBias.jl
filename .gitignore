@@ -1,4 +1,4 @@
 data/*
 *.DS_store
-.ipynb_checkpoints/
-scratch.ipynb
+.ipynb_checkpoints/*
+scratchnotebooks/*
