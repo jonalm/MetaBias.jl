@@ -2,6 +2,10 @@ using MetaBias
 using FactCheck
 using Distributions
 
+# TODO:
+# write tests for marginal distributions, e.g. control equality of order of
+# integration
+
 srand(42) # fixed random seed
 
 # data used in tests

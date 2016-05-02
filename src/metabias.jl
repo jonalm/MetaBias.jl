@@ -1,12 +1,26 @@
 module MetaBias
-export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_σ_prior, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor
+export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_σ_prior, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor, marginal_μ_density, marginal_η_density, plotpyramide
 
 using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
 using Cubature: hquadrature, hcubature
 
-# extending
-import Distributions: rand, pdf, mean, var, std
+# for plot routines
+using PyPlot
+using PyCall
+@pyimport matplotlib.patches as patch
+PyPlot.plt[:style][:use]("ggplot")
+
+import Distributions: rand, pdf, mean, var, std # extending these
+
+
+# TODO:
+# limits of the posterior effect (μ) for mixturemodel is currently set to
+# (mean-10std, mean+10std), where mean and std correspond to the null distribution,
+# these limits should be calculated or controlled explicitly
+
+
+# core types and functions
 
 immutable MixModel <: ContinuousUnivariateDistribution
     bd::Bernoulli
@@ -54,9 +68,9 @@ std(ndp::NullDensityParam) = sqrt(var(ndp))
 
 type MixModelLikelihoodPrior
     ndp::NullDensityParam
-     # sorted data, such that significant σ can be accessed by sliceing the array
+    # sorted data, such that significant σ can be accessed by sliceing the array
     sorted_effect::Array{Float64,1}
-    sorted_σ::Array{Float64,1} 
+    sorted_σ::Array{Float64,1}
     N_non_significant::Int64 # number of non significant data
     Z::Float64 # z-score corresponding to test significance level
     nullposterior::Normal
@@ -64,13 +78,13 @@ end
 
 function MixModelLikelihoodPrior{S<:Real,T<:Real}(effect::Array{S,1},σ::Array{T,1},σ_prior::Float64=2.0,Z::Float64=1.96)
     ndp = NullDensityParam(effect,σ,σ_prior)
-    
-    significance = abs(effect) - σ * Z    
+
+    significance = abs(effect) - σ * Z
     s = sortperm(significance)
     sorted_significance = significance[s]
     ff = findfirst(x->x>0.0, sorted_significance)
     N_non_significant = ff==0 ? length(sortet_significane) : ff-1
-    
+
     sorted_effect = effect[s]
     sorted_σ = σ[s]
 
@@ -102,6 +116,7 @@ function norm_const(μ::Real, σ::Real, Z::Real)
     norm_const(nd, σ, Z)
 end
 
+# Key function! Definition of density:
 logdensity(ndp::NullDensityParam,x::Real) = -(ndp.a*x^2 + ndp.b*x + ndp.c)
 function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     @assert length(x) == 2
@@ -112,19 +127,17 @@ function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     modification = reduce(+,[log(η + (1-η)*norm_const(μ,σᵢ,Z)) for σᵢ in sσ]) + Nns*log(η)
     logdensity(mm.ndp, μ) + modification
 end
-density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
-density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
-nulldensity(mm::MixModelLikelihoodPrior, x::Real) = exp(logdensity(mm.ndp,x))
-#nullposterior(mm::MixMoldeLikelihoodPrior, x::Real)
-
-function nulldensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
-    N = length(x)
+function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
+    N = size(x)[2]
     res = Array(eltype(x),N)
     for i in 1:N
-        res[i] = nulldensity(mm, x[i])
+        res[i] = logdensity(mm, x[:,i])
     end
     res
 end
+
+density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
+density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
 function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
     N = size(x)[2]
     res = Array(eltype(x),N)
@@ -134,11 +147,12 @@ function density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
     res
 end
 
-function logdensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,2})
-    N = size(x)[2]
+nulldensity(mm::MixModelLikelihoodPrior, x::Real) = exp(logdensity(mm.ndp,x))
+function nulldensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
+    N = length(x)
     res = Array(eltype(x),N)
     for i in 1:N
-        res[i] = logdensity(mm, x[:,i])
+        res[i] = nulldensity(mm, x[i])
     end
     res
 end
@@ -157,29 +171,38 @@ function mass(mm::MixModelLikelihoodPrior)
     val
 end
 
-function mass_fixed_η(mm::MixModelLikelihoodPrior, η::Real)
-    f(x) = density(mm, [η,x])
-    m, s = mean(mm.ndp), std(mm.ndp)
-    (val,err) = hquadrature(f, m - 10*s, m + 10*s)
+function marginal_μ_density(mm::MixModelLikelihoodPrior, μ::Real)
+    f(η) = density(mm, [η, μ])
+    (val,err) = hquadrature(f, 0, 1, reltol=1e-3, abstol=1e-3)
     val
 end
-
-function mass_fixed_μ(mm::MixModelLikelihoodPrior, η::Real)
-    f(x) = density(mm, [η,x])
-    m, s = mean(mm.ndp), std(mm.ndp)
-    (val,err) = hquadrature(f, m - 10*s, m + 10*s)
-    val
+function marginal_μ_density{T<:Real}(mm::MixModelLikelihoodPrior,x::Array{T,1})
+    N = length(x)
+    res = Array(eltype(x),N)
+    for i in 1:N
+        res[i] = marginal_μ_density(mm, x[i])
+    end
+    res
 end
 
-function pdf_given_η(mm::MixModelLikelihoodPrior, η::Real)
-    norm = mass_fixed_η(mm, η)
-    f(μ) = density(mm, [η, μ]) / norm
+function marginal_η_density(mm::MixModelLikelihoodPrior, η::Real)
+    f(μ) = density(mm, [η,μ])
+    m, s = mean(mm.ndp), std(mm.ndp)
+    (val,err) = hquadrature(f, m - 10*s, m + 10*s,reltol=1e-3, abstol=1e-3)
+    val
+end
+function marginal_η_density{T<:Real}(mm::MixModelLikelihoodPrior,x::Array{T,1})
+    N = length(x)
+    res = Array(eltype(x),N)
+    for i in 1:N
+        res[i] = marginal_η_density(mm, x[i])
+    end
+    res
 end
 
 function log10_bayesfactor(mm::MixModelLikelihoodPrior)
     log10(mass(mm)) - log10(nullmass(mm))
 end
-
 function bayesfactor(mm::MixModelLikelihoodPrior)
     10^log10_bayesfactor(mm)
 end
@@ -193,6 +216,7 @@ function NullPosterior{S<:Real,T<:Real}(z::Array{S,1},σ::Array{T,1},σ_prior::R
     Normal(postmean, sqrt(postvar))
 end
 
+# misc
 function import_sampledata(h5file, name)
     out = h5open(h5file, "r") do file
         z = read(file, name*"/Z_transformed_effect")[:]
@@ -201,4 +225,55 @@ function import_sampledata(h5file, name)
     end
     return out
 end
+
+# plotting
+const BLUE="#348ABD"
+const RED="#A60628"
+const ORANGE="#E24A33"
+
+function plotpyramide(mm::MixModelLikelihoodPrior)
+    sef = mm.sorted_effect
+    sσ = mm.sorted_σ
+    Nsf = mm.N_non_significant
+
+    y1 = maximum(sσ)
+    margin_y = 0.08*y1
+    ylow, yhigh = y1 + margin_y, -margin_y
+    ylowp = ylow + margin_y
+    x1,x2 = minimum(sef), maximum(sef)
+    margin_x = 0.08*(x2-x1)
+    xlow, xhigh = x1 - margin_x, x2 + margin_x
+    axmargin = 0.01
+    separator = 0.7
+    fig = figure()
+    ax1 = fig[:add_axes]([0+axmargin,0+axmargin,1-2*axmargin,separator-2*axmargin])
+    ax2 = fig[:add_axes]([0+axmargin,separator+axmargin,1-2*axmargin,1 - separator - 2*axmargin])
+
+    ax1[:invert_yaxis]()
+    c = patch.Polygon([0 0; -ylowp*mm.Z ylowp; ylowp*mm.Z ylowp],alpha=0.5,fc="white",ec="k", ls="dashed")
+    ax1[:add_artist](c)
+    ax1[:plot](sef[Nsf+1:end],sσ[Nsf+1:end],"o", color=RED, label="Significant")
+    ax1[:plot](sef[1:Nsf],sσ[1:Nsf],"o", color=BLUE, label="Non-significant")
+    ax1[:set_ylim]([ylow,yhigh])
+    ax1[:set_xlim]([xlow,xhigh])
+    ax1[:legend](numpoints=1)
+    ax1[:set_ylabel]("measured error (std)")
+    ax1[:set_xlabel]("measured effect")
+
+    a = mean(mm.ndp)
+    b = std(mm.ndp)
+    xmin, xmax = a - 10*b, a + 10*b
+    xx = collect(linspace(xmin, xmax,100))
+    yy = pdf(mm.nullposterior,xx)
+    zz = marginal_μ_density(mm, xx) / mass(mm)
+
+    ax2[:fill_between](xx,0,yy, color="k", alpha=0.7, label="Null posterior")
+    ax2[:fill_between](xx,0,zz, color=ORANGE, alpha=0.7, label="MixModel marginal posterior")
+    ax2[:set_xlim]([xlow,xhigh])
+    ax2[:legend](numpoints=1)
+    ax2[:set_xticklabels]([])
+    ax2[:set_ylabel]("pdf posterior effect")
+    fig, (ax1,ax2)
+end
+
 end
