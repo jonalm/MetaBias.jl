@@ -59,9 +59,12 @@ type MixModelLikelihoodPrior
     sorted_σ::Array{Float64,1} 
     N_non_significant::Int64 # number of non significant data
     Z::Float64 # z-score corresponding to test significance level
+    nullposterior::Normal
 end
 
 function MixModelLikelihoodPrior{S<:Real,T<:Real}(effect::Array{S,1},σ::Array{T,1},σ_prior::Float64=2.0,Z::Float64=1.96)
+    ndp = NullDensityParam(effect,σ,σ_prior)
+    
     significance = abs(effect) - σ * Z    
     s = sortperm(significance)
     sorted_significance = significance[s]
@@ -71,11 +74,12 @@ function MixModelLikelihoodPrior{S<:Real,T<:Real}(effect::Array{S,1},σ::Array{T
     sorted_effect = effect[s]
     sorted_σ = σ[s]
 
-    MixModelLikelihoodPrior(NullDensityParam(effect,σ,σ_prior),
+    MixModelLikelihoodPrior(ndp,
                             sorted_effect,
                             sorted_σ,
                             N_non_significant,
-                            Z)
+                            Z,
+                            Normal(mean(ndp), std(ndp)))
 end
 
 function reset_σ_prior(ndp::NullDensityParam, σ_prior::Real)
@@ -85,6 +89,7 @@ function reset_σ_prior(ndp::NullDensityParam, σ_prior::Real)
 end
 function reset_σ_prior(mm::MixModelLikelihoodPrior, σ_prior::Real)
     mm.ndp = reset_σ_prior(mm.ndp, σ_prior)
+    mm.nullposterior = Normal(mean(mm.ndp), std(mm.ndp))
     mm
 end
 
@@ -110,6 +115,7 @@ end
 density{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1}) = exp(logdensity(mm,x))
 density(ndp::NullDensityParam,x::Real) = exp(logdensity(ndp,x))
 nulldensity(mm::MixModelLikelihoodPrior, x::Real) = exp(logdensity(mm.ndp,x))
+#nullposterior(mm::MixMoldeLikelihoodPrior, x::Real)
 
 function nulldensity{T<:Real}(mm::MixModelLikelihoodPrior, x::Array{T,1})
     N = length(x)

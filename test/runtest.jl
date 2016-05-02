@@ -27,6 +27,28 @@ facts("mean and var are consistent for NullDensityParam and NullPosterior") do
     @fact mean(ndp) --> roughly(mean(np))
 end
 
+facts("MixModelLikelihoodPrior.nullposterior equal to MetaBias.NullPosterior") do
+    σ_prior = 2.0
+    mm = MixModelLikelihoodPrior(effect,σ,σ_prior)
+    np = NullPosterior(effect,σ,σ_prior)
+    for ri in r
+        @fact pdf(mm.nullposterior, ri) --> roughly(pdf(np, ri))
+    end
+end
+
+facts("MixModelLikelihoodPrior.nullposterior correct after changing σ_prior") do
+    σ_prior_original = 1.0
+    σ_prior_new = 2.0
+   
+    mm = MixModelLikelihoodPrior(effect,σ, σ_prior_original)
+    reset_σ_prior(mm, σ_prior_new)
+    
+    np = NullPosterior(effect,σ,σ_prior_new)
+    for ri in r
+        @fact pdf(mm.nullposterior, ri) --> roughly(pdf(np, ri))
+    end
+end
+
 facts("Null likelihood prior density proportioal to null pdf") do
     σ_prior = 3.0
     np = NullPosterior(effect,σ,σ_prior)
