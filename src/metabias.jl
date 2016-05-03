@@ -1,5 +1,5 @@
 module MetaBias
-export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_σ_prior, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor, marginal_μ_density, marginal_η_density, plotpyramide
+export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_σ_prior, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor, marginal_μ_density, marginal_η_density, plotpyramide, plotjoint
 
 using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
@@ -172,6 +172,7 @@ function mass(mm::MixModelLikelihoodPrior)
 end
 
 function marginal_μ_density(mm::MixModelLikelihoodPrior, μ::Real)
+    # accuracy not important, only used for plots
     f(η) = density(mm, [η, μ])
     (val,err) = hquadrature(f, 0, 1, reltol=1e-3, abstol=1e-3)
     val
@@ -186,6 +187,7 @@ function marginal_μ_density{T<:Real}(mm::MixModelLikelihoodPrior,x::Array{T,1})
 end
 
 function marginal_η_density(mm::MixModelLikelihoodPrior, η::Real)
+    # accuracy not important, only used for plots
     f(μ) = density(mm, [η,μ])
     m, s = mean(mm.ndp), std(mm.ndp)
     (val,err) = hquadrature(f, m - 10*s, m + 10*s,reltol=1e-3, abstol=1e-3)
@@ -246,11 +248,14 @@ function plotpyramide(mm::MixModelLikelihoodPrior)
     axmargin = 0.01
     separator = 0.7
     fig = figure()
-    ax1 = fig[:add_axes]([0+axmargin,0+axmargin,1-2*axmargin,separator-2*axmargin])
-    ax2 = fig[:add_axes]([0+axmargin,separator+axmargin,1-2*axmargin,1 - separator - 2*axmargin])
+    ax1 = fig[:add_axes]([0+axmargin,0+axmargin,
+                          1-2*axmargin,separator-2*axmargin])
+    ax2 = fig[:add_axes]([0+axmargin,separator+axmargin,
+                          1-2*axmargin,1 - separator - 2*axmargin])
 
     ax1[:invert_yaxis]()
-    c = patch.Polygon([0 0; -ylowp*mm.Z ylowp; ylowp*mm.Z ylowp],alpha=0.5,fc="white",ec="k", ls="dashed")
+    c = patch.Polygon([0 0; -ylowp*mm.Z ylowp; ylowp*mm.Z ylowp],
+                      alpha=0.5,fc="white",ec="k", ls="dashed")
     ax1[:add_artist](c)
     ax1[:plot](sef[Nsf+1:end],sσ[Nsf+1:end],"o", color=RED, label="Significant")
     ax1[:plot](sef[1:Nsf],sσ[1:Nsf],"o", color=BLUE, label="Non-significant")
@@ -267,13 +272,67 @@ function plotpyramide(mm::MixModelLikelihoodPrior)
     yy = pdf(mm.nullposterior,xx)
     zz = marginal_μ_density(mm, xx) / mass(mm)
 
-    ax2[:fill_between](xx,0,yy, color="k", alpha=0.7, label="Null posterior")
-    ax2[:fill_between](xx,0,zz, color=ORANGE, alpha=0.7, label="MixModel marginal posterior")
+    ax2[:fill_between](xx,0,yy, color=ORANGE,
+                       alpha=0.7, label="Null posterior")
+    ax2[:fill_between](xx,0,zz, color="k",
+                       alpha=0.7, label="MixModel marginal posterior")
     ax2[:set_xlim]([xlow,xhigh])
     ax2[:legend](numpoints=1)
     ax2[:set_xticklabels]([])
-    ax2[:set_ylabel]("pdf posterior effect")
+    ax2[:set_ylabel](L"pdf posterior effect, $p(\mu|$data$)$")
     fig, (ax1,ax2)
+end
+
+function plotjoint(mm::MixModelLikelihoodPrior, etamin::Real=0.5, μstdwidth::Real=6.0)
+    @assert 0.0 <= etamin <= 1.0
+    @assert 0.0 < μstdwidth
+    a, b = mean(mm.ndp), std(mm.ndp)
+    murange = [a-μstdwidth*b, a+μstdwidth*b]
+    etarange = [etamin,1.0]
+
+    mass_ = mass(mm)
+
+    NY, NX = 100, 100
+    eta = linspace(etarange[1],etarange[2],NY) |> collect
+    mu = linspace(murange[1], murange[2], NX) |> collect
+    ETA = Float64[e for e in eta, m in mu]
+    MU = Float64[m for e in eta, m in mu]
+    coord = [ETA[:] MU[:]]'
+    jointlogdensity = reshape(logdensity(mm, coord), NY, NX)
+    jointpdf = exp(jointlogdensity) / mass_
+    marginal_mu = marginal_μ_density(mm, mu) / mass_
+    marginal_eta = marginal_η_density(mm, eta) / mass_
+
+    axmargin = 0.01
+    separator = 0.8
+    fig = figure(figsize=(8,8))
+    ax1 = fig[:add_axes]([0+axmargin,0+axmargin,
+                          separator-2*axmargin,separator-2*axmargin])
+    ax2 = fig[:add_axes]([0+axmargin,separator+axmargin,
+                          separator-2*axmargin , 1 - separator - 2*axmargin])
+    ax3 = fig[:add_axes]([separator+axmargin,axmargin,
+                          1-separator-2*axmargin, separator - 2*axmargin])
+    ax2[:set_xticklabels]([])
+    ax3[:set_yticklabels]([])
+    ax1[:contour](MU,ETA, jointlogdensity,10,colors=RED, alpha=0.5)
+    ax1[:contour](MU,ETA, jointpdf,10,colors="k")
+    ax2[:fill_between](mu,0,marginal_mu,color="k")
+    ax2[:set_xlim](murange)
+    ax3[:fill_betweenx](eta,0,marginal_eta,color="k")
+    ax3[:set_ylim](etarange)
+
+    ax1[:legend](numpoints=1)
+    fig[:text](2*axmargin,5*axmargin,
+               "Joint Posterior Distributions",
+               verticalalignment="bottom", horizontalalignment="left")
+    fig[:text](2*axmargin,2*axmargin,
+               L"Black solid: $p(\mu, \eta\, |$ data $) \quad $ Stapled red : $\log p(\mu, \eta\, |$ data $)$",
+               verticalalignment="bottom", horizontalalignment="left")
+    ax1[:set_xlabel](L"$\mu$")
+    ax1[:set_ylabel](L"$\eta$")
+    ax2[:set_ylabel](L"$p(\mu\,|$ data$)$")
+    ax3[:set_xlabel](L"$p(\eta\,|$ data$)$")
+    fig, (ax1, ax2, ax3)
 end
 
 end
