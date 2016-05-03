@@ -1,5 +1,5 @@
 module MetaBias
-export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_σ_prior, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor, marginal_μ_density, marginal_η_density, plotpyramide, plotjoint
+export MixModelLikelihoodPrior, MixModel, NullPosterior, reset_σ_prior, import_sampledata, density, nulldensity, mass, nullmass, mean, var, std, rand, pdf, bayesfactor, log10_bayesfactor, marginal_μ_density, marginal_η_density, plotpyramide, plotjoint, plotbayesfactor
 
 using Distributions: Normal, Bernoulli, cdf, ContinuousUnivariateDistribution
 using HDF5: h5open
@@ -74,9 +74,14 @@ type MixModelLikelihoodPrior
     N_non_significant::Int64 # number of non significant data
     Z::Float64 # z-score corresponding to test significance level
     nullposterior::Normal
+    name::ASCIIString
 end
 
-function MixModelLikelihoodPrior{S<:Real,T<:Real}(effect::Array{S,1},σ::Array{T,1},σ_prior::Float64=2.0,Z::Float64=1.96)
+function MixModelLikelihoodPrior{S<:Real,T<:Real}(effect::Array{S,1},
+                                                  σ::Array{T,1},
+                                                  σ_prior::Float64=2.0,
+                                                  Z::Float64=1.96,
+                                                  name::ASCIIString="unset")
     ndp = NullDensityParam(effect,σ,σ_prior)
 
     significance = abs(effect) - σ * Z
@@ -93,7 +98,8 @@ function MixModelLikelihoodPrior{S<:Real,T<:Real}(effect::Array{S,1},σ::Array{T
                             sorted_σ,
                             N_non_significant,
                             Z,
-                            Normal(mean(ndp), std(ndp)))
+                            Normal(mean(ndp), std(ndp)),
+                            name)
 end
 
 function reset_σ_prior(ndp::NullDensityParam, σ_prior::Real)
@@ -207,6 +213,20 @@ function log10_bayesfactor(mm::MixModelLikelihoodPrior)
 end
 function bayesfactor(mm::MixModelLikelihoodPrior)
     10^log10_bayesfactor(mm)
+end
+
+function bayesfactor{T<:Real}(mm::MixModelLikelihoodPrior,σ_priors::Array{T,1})
+    original_prior  = mm.ndp.σ_prior
+    N = length(σ_priors)
+    res = Array(eltype(σ_priors), N)
+
+    for i in 1:N
+        reset_σ_prior(mm, σ_priors[i])
+        res[i] = bayesfactor(mm)
+    end
+
+    reset_σ_prior(mm, original_prior)
+    res
 end
 
 # functions for test purposes
@@ -334,5 +354,32 @@ function plotjoint(mm::MixModelLikelihoodPrior, etamin::Real=0.5, μstdwidth::Re
     ax3[:set_xlabel](L"$p(\eta\,|$ data$)$")
     fig, (ax1, ax2, ax3)
 end
+
+function add_bayes2ax{T<:Real}(mm::MixModelLikelihoodPrior, ax::PyCall.PyObject, priors::Array{T,1}) 
+    res = bayesfactor(mm, priors)
+    ax[:loglog](priors,res)
+    ax   
+end
+
+function plotbayesfactor(mm::MixModelLikelihoodPrior)
+    plotbayesfactor([mm])
+end
+
+function plotbayesfactor(mmm::Array{MixModelLikelihoodPrior, 1})
+    priors = collect(logspace(-2,2))
+    fig = figure(figsize=(8,8))
+    ax = fig[:add_subplot](111)
+
+    for mm in mmm
+        add_bayes2ax(mm,ax,priors)
+    end
+    
+    ax[:set_ylabel]("Bayes Factor")
+    ax[:set_xlabel](L"$\sigma$ prior")
+    fig, ax    
+end
+
+
+
 
 end
