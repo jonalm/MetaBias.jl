@@ -8,17 +8,22 @@ using Cubature: hquadrature, hcubature
 # for plot routines
 using PyPlot
 using PyCall
+using Formatting
 @pyimport matplotlib.patches as patch
 PyPlot.plt[:style][:use]("ggplot")
 
 import Distributions: rand, pdf, mean, var, std # extending these
 
-
 # TODO:
+#
 # limits of the posterior effect (μ) for mixturemodel is currently set to
 # (mean-10std, mean+10std), where mean and std correspond to the null distribution,
 # these limits should be calculated or controlled explicitly
-
+#
+# Write function which prints out summary results, e.g. confidence intervals,
+# maximum posterior, posterior mean etc.
+#
+# plotbayesfactor(...) places unasserted restrictions on priorvector input.
 
 # core types and functions
 
@@ -355,10 +360,13 @@ function plotjoint(mm::MixModelLikelihoodPrior, etamin::Real=0.5, μstdwidth::Re
     fig, (ax1, ax2, ax3)
 end
 
-function add_bayes2ax{T<:Real}(mm::MixModelLikelihoodPrior, ax::PyCall.PyObject, priors::Array{T,1}) 
+function add_bayes2ax!{T<:Real}(ax::PyCall.PyObject, mm::MixModelLikelihoodPrior, priors::Array{T,1})
     res = bayesfactor(mm, priors)
-    ax[:loglog](priors,res)
-    ax   
+    line = ax[:loglog](priors,res,label=mm.name)
+    color = line[1][:get_color]()
+    asymph = sprintf1("%5.3f", mean(res[end-5:end]))
+    ax[:text](priors[end], res[end], asymph, verticalalignment="center", color=color)
+    ax
 end
 
 function plotbayesfactor(mm::MixModelLikelihoodPrior)
@@ -370,16 +378,17 @@ function plotbayesfactor(mmm::Array{MixModelLikelihoodPrior, 1})
     fig = figure(figsize=(8,8))
     ax = fig[:add_subplot](111)
 
+    ax[:text](0.1,1.1,"Bf > 1 : Evidence for MixModel", verticalalignment="bottom")
+    ax[:text](0.1,1/1.1,"Bf < 1 : Evidence for Null", verticalalignment="top")
+    ax[:loglog]([priors[1],priors[end]],[1.0,1.0],"k",lw=1.)
+
     for mm in mmm
-        add_bayes2ax(mm,ax,priors)
+        add_bayes2ax!(ax,mm,priors)
     end
-    
-    ax[:set_ylabel]("Bayes Factor")
+    ax[:set_ylabel]("Bayes Factor, Bf = Prob(MixModel | data) / Prob(Null | data)")
     ax[:set_xlabel](L"$\sigma$ prior")
-    fig, ax    
+    ax[:legend]()
+
+    fig, ax
 end
-
-
-
-
 end
